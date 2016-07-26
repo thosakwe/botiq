@@ -1,2 +1,6 @@
 # botiq
-A super-powered DSL for bot building.
+
+# To-do
+* Test
+* LLVM CodeGen class
+* Linter
