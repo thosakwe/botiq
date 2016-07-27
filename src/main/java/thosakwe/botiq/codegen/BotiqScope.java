@@ -1,6 +1,6 @@
 package thosakwe.botiq.codegen;
 
-import thosakwe.botiq.antlr.BotiqParser;
+import org.antlr.v4.runtime.ParserRuleContext;
 import thosakwe.botiq.codegen.data.BotiqDatum;
 
 import java.util.ArrayList;
@@ -12,7 +12,7 @@ public class BotiqScope {
     private final BotiqToLlvmCompiler compiler;
     private Map<String, Integer> prefixes = new HashMap<String, Integer>();
 
-    public BotiqScope(BotiqToLlvmCompiler compiler) {
+    BotiqScope(BotiqToLlvmCompiler compiler) {
         this.compiler = compiler;
     }
 
@@ -22,15 +22,15 @@ public class BotiqScope {
 
     private List<BotiqSymbol> symbols = new ArrayList<BotiqSymbol>();
 
-    public List<BotiqScope> getChildren() {
+    private List<BotiqScope> getChildren() {
         return children;
     }
 
     private List<BotiqScope> children = new ArrayList<BotiqScope>();
 
-    public BotiqSymbol createConstant(BotiqDatum value, String prefix) {
+    public BotiqSymbol createConstant(BotiqDatum value, String prefix, ParserRuleContext source) {
         BotiqSymbol result = new BotiqSymbol(compiler, prefix + incrementConstant(prefix));
-        result.setValue(value);
+        result.setValue(value, source);
         result.setConstant(true);
         symbols.add(result);
         return result;
@@ -70,25 +70,30 @@ public class BotiqScope {
         }
     }
 
-    BotiqScope getCurrentScope() {
+    private BotiqScope getCurrentScope() {
         if (children.isEmpty())
             return this;
 
         return children.get(children.size() - 1);
     }
 
-    BotiqDatum get(String id) {
+    BotiqDatum get(String id, ParserRuleContext source) {
+        return get(id, source, true);
+    }
+
+    BotiqDatum get(String id, ParserRuleContext source, boolean throwIfAbsent) {
         BotiqSymbol symbol = getSymbol(id);
 
         if (symbol != null)
-        return getSymbol(id).getValue();
+            return symbol.getValue();
         else {
-            compiler.error("The symbol '" + id + "' is undefined in this context.");
+            if (throwIfAbsent)
+                compiler.error("The symbol '" + id + "' is undefined in this context.", source);
             return null;
         }
     }
 
-    BotiqSymbol getSymbol(String id) {
+    private BotiqSymbol getSymbol(String id) {
         for (int i = children.size() - 1; i >= 0; i--) {
             BotiqScope scope = children.get(i);
             BotiqSymbol found = scope.getSymbol(id);
@@ -97,7 +102,7 @@ public class BotiqScope {
                 return found;
         }
 
-        for (BotiqSymbol symbol: symbols) {
+        for (BotiqSymbol symbol : symbols) {
             if (symbol.getId().equals(id))
                 return symbol;
         }
@@ -105,20 +110,25 @@ public class BotiqScope {
         return null;
     }
 
-    void put(String id, BotiqDatum value) {
+    void put(String id, BotiqDatum value, ParserRuleContext source) {
+        put(id, value, source, false);
+    }
+
+    void put(String id, BotiqDatum value, ParserRuleContext source, boolean constant) {
         BotiqSymbol target = getSymbol(id);
 
         if (target == null)
             target = createSymbol(id);
 
-        target.setValue(value);
+        target.setConstant(constant);
+        target.setValue(value, source);
     }
 
     List<BotiqSymbol> getAllSymbols() {
         List<BotiqSymbol> result = new ArrayList<BotiqSymbol>();
         result.addAll(symbols);
 
-        for (BotiqScope scope: getChildren()) {
+        for (BotiqScope scope : getChildren()) {
             result.addAll(scope.getAllSymbols());
         }
 

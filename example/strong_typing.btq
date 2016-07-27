@@ -1,0 +1,8 @@
+fn greet(argc:int, argv:string):string => "Hello, world!"
+
+fn main():int {
+    string msg = greet(420, "blaze it");
+    printf("%d blaze it", 420);
+    puts(msg);
+    ret 0;
+}

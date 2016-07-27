@@ -1,5 +1,6 @@
 package thosakwe.botiq.codegen.data.stdlib;
 
+import org.antlr.v4.runtime.ParserRuleContext;
 import thosakwe.botiq.antlr.BotiqParser;
 import thosakwe.botiq.codegen.BotiqSymbol;
 import thosakwe.botiq.codegen.BotiqToLlvmCompiler;
@@ -9,18 +10,20 @@ import thosakwe.botiq.codegen.data.BotiqStandardResult;
 
 public class BotiqPrintfFunction extends BotiqFunction {
     public BotiqPrintfFunction(BotiqToLlvmCompiler compiler) {
-        super(compiler, null);
+        super(compiler);
+        setNumberOfParams(-1);
     }
 
     @Override
     public void declareConst(String id) {
         compiler.println("declare i32 @" + id + "(i8*, ...)");
+        setId(id);
         super.declareConst(id);
     }
 
     @Override
-    public BotiqDatum invoke(BotiqParser.ArgSpecContext argSpecContext) {
-        compiler.print("call i32 @printf(");
+    public BotiqDatum invoke(BotiqParser.ArgSpecContext argSpecContext, ParserRuleContext source) {
+        compiler.print("call i32 (i8*, ...) @printf(");
 
         for (int i = 0; i < argSpecContext.expr().size(); i++) {
             if (i > 0)
@@ -29,7 +32,7 @@ public class BotiqPrintfFunction extends BotiqFunction {
 
             if (arg != null)
                 compiler.write(arg.getLlvmValue());
-            else compiler.error("Invalid expression '" + argSpecContext.expr(i).getText() + "' passed to 'print'.");
+            else compiler.error("Invalid expression '" + argSpecContext.expr(i).getText() + "' passed to 'print'.", source);
         }
 
         compiler.writeln(")");
@@ -40,5 +43,10 @@ public class BotiqPrintfFunction extends BotiqFunction {
     public void onAssigned(BotiqSymbol symbol) {
         symbol.setConstant(true);
         super.onAssigned(symbol);
+    }
+
+    @Override
+    public String toString() {
+        return "(format:string, args...) => int";
     }
 }

@@ -1,12 +1,13 @@
 package thosakwe.botiq.codegen.data;
 
+import org.antlr.v4.runtime.ParserRuleContext;
 import thosakwe.botiq.antlr.BotiqParser;
 import thosakwe.botiq.codegen.BotiqSymbol;
 import thosakwe.botiq.codegen.BotiqToLlvmCompiler;
 
 public abstract class BotiqDatum {
     protected final BotiqToLlvmCompiler compiler;
-    private final BotiqParser.ExprContext source;
+    public final BotiqParser.ExprContext source;
     private String llvmType;
 
     protected BotiqDatum(BotiqToLlvmCompiler compiler, BotiqParser.ExprContext source) {
@@ -14,9 +15,10 @@ public abstract class BotiqDatum {
         this.source = source;
     }
 
-    public void declareConst(String id) {}
+    public void declareConst(String id) {
+    }
 
-    String getLlvmType() {
+    public String getLlvmType() {
         return llvmType;
     }
 
@@ -28,15 +30,18 @@ public abstract class BotiqDatum {
         return null;
     }
 
-    public BotiqDatum invoke(BotiqParser.ArgSpecContext argSpecContext) {
-        compiler.error("Expression '" + source.getText() + "' is not a function.");
+    public BotiqDatum invoke(BotiqParser.ArgSpecContext argSpecContext, ParserRuleContext source) {
+        if (this.source != null)
+            compiler.error("Expression '" + this.source.getText() + "' is not a function.", argSpecContext);
+        else compiler.error("Expression [" + getClass().getName() + "] is not a function.", argSpecContext);
         return null;
     }
 
     public String getLlvmValue() {
-        compiler.warn("null value");
+        compiler.warn("null value", source != null ? source : compiler.ast);
         return "0";
     }
 
-    public void onAssigned(BotiqSymbol symbol) {}
+    public void onAssigned(BotiqSymbol symbol) {
+    }
 }

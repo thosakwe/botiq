@@ -12,13 +12,13 @@ public class BotiqString extends BotiqDatum {
     public BotiqString(BotiqToLlvmCompiler compiler, BotiqParser.StringLiteralExprContext source) {
         super(compiler, source);
         text = getText(source);
-        id = compiler.rootScope.createConstant(this, ".str").getId();
+        id = compiler.rootScope.createConstant(this, ".str", source).getId();
     }
 
     public BotiqString(BotiqToLlvmCompiler compiler, BotiqParser.RawStringLiteralExprContext source) {
         super(compiler, source);
         text = getText(source);
-        id = compiler.rootScope.createConstant(this, ".str").getId();
+        id = compiler.rootScope.createConstant(this, ".str", source).getId();
     }
 
     @Override
@@ -34,17 +34,27 @@ public class BotiqString extends BotiqDatum {
     private String getText(BotiqParser.StringLiteralExprContext source) {
         return source.getText()
                 .replaceAll("(^\")|(\"$)", "")
-                /*.replaceAll(Matcher.quoteReplacement("\\\""), "\"")
-                .replaceAll(Matcher.quoteReplacement("\\n"), "\n")
-                .replaceAll(Matcher.quoteReplacement("\\b"), "\b")
-                .replaceAll(Matcher.quoteReplacement("\\t"), "\t")
+                .replaceAll(Matcher.quoteReplacement("\\\""), "\"")
+                .replaceAll(Matcher.quoteReplacement("\\n"), "\\10")
+                .replaceAll(Matcher.quoteReplacement("\\b"), "\\\08")
+                .replaceAll(Matcher.quoteReplacement("\\t"), "\\\09")
                 .replaceAll("\\\\", "\\")
-                .replaceAll(Matcher.quoteReplacement("\\r"), "\r")*/;
+                .replaceAll(Matcher.quoteReplacement("\\r"), "\\\10");
 
+    }
+
+    @Override
+    public String getLlvmType() {
+        return "i8*";
     }
 
     @Override
     public String getLlvmValue() {
         return "i8* getelementptr inbounds ([" + (text.length() + 1) + " x i8], [" + (text.length() + 1) + " x i8]* @" + id + ", i32 0, i32 0)";
+    }
+
+    @Override
+    public String toString() {
+        return '"' + text + '"';
     }
 }

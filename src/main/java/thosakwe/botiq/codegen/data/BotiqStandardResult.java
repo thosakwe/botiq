@@ -10,6 +10,6 @@ public class BotiqStandardResult extends BotiqDatum {
 
     @Override
     public String getLlvmValue() {
-        return "%result";
+        return getLlvmType() + " %result";
     }
 }

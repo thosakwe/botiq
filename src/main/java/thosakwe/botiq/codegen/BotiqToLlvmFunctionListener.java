@@ -1,9 +1,10 @@
 package thosakwe.botiq.codegen;
 
-import org.antlr.v4.runtime.tree.ParseTreeWalker;
 import thosakwe.botiq.antlr.BotiqBaseListener;
 import thosakwe.botiq.antlr.BotiqParser;
 import thosakwe.botiq.codegen.data.BotiqDatum;
+import thosakwe.botiq.codegen.data.BotiqFunction;
+import thosakwe.botiq.codegen.data.BotiqType;
 
 class BotiqToLlvmFunctionListener extends BotiqBaseListener {
     private BotiqToLlvmCompiler compiler;
@@ -15,8 +16,8 @@ class BotiqToLlvmFunctionListener extends BotiqBaseListener {
     @Override
     public void enterFunctionDecl(BotiqParser.FunctionDeclContext ctx) {
         BotiqParser.FunctionBodyContext bodyContext = ctx.functionBody();
-
         String name = ctx.name.getText();
+
         if (name.equals("main")) {
             compiler.hasMain = true;
             name = "botiq_main";
@@ -25,25 +26,37 @@ class BotiqToLlvmFunctionListener extends BotiqBaseListener {
         BotiqParser.TypeContext outputType = bodyContext.type();
         if (outputType == null) {
             // Let's track down the output type
-            compiler.warn("Implicit function return types are not supported yet.");
+            compiler.error("Implicit function return types are not supported yet.", ctx);
+            return;
         }
 
+        String type = outputType.getText();
+        BotiqDatum requiredTypeDatum = compiler.rootScope.get(type, outputType);
+
+        if (!(requiredTypeDatum != null && requiredTypeDatum instanceof BotiqType)) {
+            compiler.error("Function '" + name + "' cannot return a value of non-existent type '" + type + "'", ctx);
+            return;
+        }
+
+        BotiqType requiredType = (BotiqType) requiredTypeDatum;
+
         compiler.print("define ", false);
-        compiler.print(compiler.getStringForType(outputType));
+        compiler.print(compiler.getStringForType(outputType, bodyContext.type()));
         compiler.print(" @" + name + "(", false);
 
         // Add parameters
         for (int i = 0; i < bodyContext.paramSpec().size(); i++) {
             if (i > 0)
-                compiler.print(", ");
+                compiler.print(", ", false);
 
             BotiqParser.ParamSpecContext paramSpecContext = bodyContext.paramSpec(i);
             BotiqParser.TypeContext paramType = paramSpecContext.type();
 
             if (paramType != null)
-                compiler.print(compiler.getStringForType(paramType));
-            else compiler.warn("Parameter '" + paramSpecContext.ID().getText() + "' should be declared with a type.");
-            compiler.print(" %");
+                compiler.print(compiler.getStringForType(paramType, paramType));
+            else
+                compiler.warn("Parameter '" + paramSpecContext.ID().getText() + "' should be declared with a type.", paramSpecContext);
+            compiler.print(" %", false);
             compiler.print(paramSpecContext.ID().getText());
         }
 
@@ -53,8 +66,26 @@ class BotiqToLlvmFunctionListener extends BotiqBaseListener {
 
         if (bodyContext.expr() != null) {
             BotiqDatum returnValue = compiler.resolveExpr(bodyContext.expr());
-            compiler.println("ret " + returnValue.getLlvmValue());
-        } else compiler.walk(ctx);
+            if (returnValue != null) {
+                compiler.println("ret " + returnValue.getLlvmValue());
+                if (!requiredType.canCastDatum(returnValue)) {
+                    compiler.error(
+                            "Expression lambda '" + ctx.functionBody().getText()
+                                    + "' is declared with return type '" + requiredType + "', "
+                                    + "but in reality returns a '" + returnValue + "'.",
+                            bodyContext.expr());
+                    return;
+                }
+            } else {
+                compiler.error("Cannot return invalid expression '" + bodyContext.expr().getText() + "' within lambda.", bodyContext.expr());
+            }
+        } else compiler.walk(ctx.ID().getText(), requiredType, ctx.functionBody());
+
+        // Create function in scope
+        BotiqFunction result = new BotiqFunction(compiler, ctx.functionBody(), ctx.ID().getText());
+        result.setNumberOfParams(ctx.functionBody().paramSpec().size());
+        compiler.rootScope.put(ctx.ID().getText(), result, ctx);
+
         super.enterFunctionDecl(ctx);
     }
 
@@ -62,6 +93,6 @@ class BotiqToLlvmFunctionListener extends BotiqBaseListener {
     public void exitFunctionDecl(BotiqParser.FunctionDeclContext ctx) {
         super.exitFunctionDecl(ctx);
         compiler.tabs--;
-        compiler.println("}\n");
+        compiler.println("}\n", false);
     }
 }

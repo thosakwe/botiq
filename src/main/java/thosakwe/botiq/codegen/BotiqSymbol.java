@@ -1,5 +1,6 @@
 package thosakwe.botiq.codegen;
 
+import org.antlr.v4.runtime.ParserRuleContext;
 import thosakwe.botiq.antlr.BotiqParser;
 import thosakwe.botiq.codegen.data.BotiqDatum;
 
@@ -31,9 +32,9 @@ public class BotiqSymbol {
         return value;
     }
 
-    void setValue(BotiqDatum value) {
+    void setValue(BotiqDatum value, ParserRuleContext source) {
         if (constant) {
-            compiler.error("Cannot overwrite constant variable: '" + getId() + "'");
+            compiler.error("Cannot overwrite constant variable: '" + getId() + "'", source);
             return;
         }
 

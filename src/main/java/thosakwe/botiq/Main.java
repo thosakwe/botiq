@@ -57,15 +57,17 @@ public class Main {
                     ? System.out
                     : new PrintStream(outputFile);
 
-            BotiqToLlvmCompiler compiler = new BotiqToLlvmCompiler(outputStream, commandLine);
+            BotiqToLlvmCompiler compiler = new BotiqToLlvmCompiler(inputFile.getAbsolutePath(), outputStream, commandLine);
             compiler.visitCompilationUnit(parser.compilationUnit());
 
             for (String warning : compiler.compilerWarnings) {
-                System.err.println("warning: " + warning);
+                //System.err.println("warning: " + warning);
+                System.err.println(warning);
             }
 
             for (String error : compiler.compilerErrors) {
-                System.err.println("error: " + error);
+                //System.err.println("error: " + error);
+                System.err.println(error);
             }
 
             if (!compiler.compilerErrors.isEmpty()) {

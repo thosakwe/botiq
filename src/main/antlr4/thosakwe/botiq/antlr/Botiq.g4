@@ -77,12 +77,12 @@ type:
     | name=ID LT generic=type GT;
 
 stmt:
-    assignStmt
+    vardeclStmt
+    | assignStmt
     | exprStmt
     | forStmt
     | foreachStmt
     | retStmt
-    | vardeclStmt
 ;
 
 assignStmt: left=expr EQUALS right=expr;
@@ -110,9 +110,11 @@ expr:
     | REGEX_LITERAL #RegexLiteralExpr
     | dictionaryLiteral #DictionaryLiteralExpr
     | expr PAREN_L argSpec PAREN_R #CallExpr
+    | PAREN_L type PAREN_R expr #TypeCastExpr
     | expr (CARET | MODULO | TIMES | DIVIDE | PLUS | MINUS ) expr #ArithmeticExpr
     | left=expr booleanOperator right=expr #BoolExpr
     | NEW type PAREN_L argSpec PAREN_R #NewExpr
+    | type #TypeExpr
     | type COLON COLON ID #StaticMemberExpr
     | expr DOT ID #MemberExpr
     | AWAIT expr #AwaitExpr

@@ -4,11 +4,16 @@ import thosakwe.botiq.antlr.BotiqParser;
 import thosakwe.botiq.codegen.data.BotiqDatum;
 
 public class BotiqInteger extends BotiqDatum {
-    private int value;
+    private Integer value;
 
     BotiqInteger(BotiqToLlvmCompiler compiler, BotiqParser.IntegerExprContext source) {
         super(compiler, source);
         value = Integer.parseInt(source.getText());
+    }
+
+    @Override
+    public String toString() {
+        return value.toString();
     }
 
     @Override
