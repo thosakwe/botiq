@@ -6,6 +6,11 @@ import thosakwe.botiq.codegen.data.BotiqDatum;
 import thosakwe.botiq.codegen.data.BotiqFunction;
 import thosakwe.botiq.codegen.data.BotiqType;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 class BotiqToLlvmFunctionListener extends BotiqBaseListener {
     private BotiqToLlvmCompiler compiler;
 
@@ -20,6 +25,7 @@ class BotiqToLlvmFunctionListener extends BotiqBaseListener {
 
         if (name.equals("main")) {
             compiler.hasMain = true;
+            compiler.mainBody = bodyContext;
             name = "botiq_main";
         }
 
@@ -65,6 +71,31 @@ class BotiqToLlvmFunctionListener extends BotiqBaseListener {
         compiler.tabs++;
 
         if (bodyContext.expr() != null) {
+            // Momentarily inject params
+            Map<String, BotiqDatum> pastValues = new HashMap<String, BotiqDatum>();
+
+            for (int i = 0; i < bodyContext.paramSpec().size(); i++) {
+                BotiqParser.ParamSpecContext paramSpec = bodyContext.paramSpec(i);
+                String paramName = paramSpec.ID().getText();
+                String paramType = paramSpec.type().getText();
+                BotiqDatum pastValue = compiler.rootScope.get(paramName, paramSpec, false);
+
+                if (pastValue != null)
+                    pastValues.put(paramName, pastValue);
+
+                BotiqDatum paramRequiredTypeDatum = compiler.rootScope.get(paramType, paramSpec.type());
+                if (!(paramRequiredTypeDatum != null && paramRequiredTypeDatum instanceof BotiqType)) {
+                    compiler.error("Lambda parameter '" + paramName + "' cannot be a value of non-existent type '" + paramType + "'", ctx);
+                    return;
+                }
+
+                BotiqType paramRequiredType = (BotiqType) paramRequiredTypeDatum;
+                BotiqDatum prototype = paramRequiredType.getPrototype();
+
+                // compiler.debug("Lambda injecting '" + paramName + "' => '" + prototype + "'");
+                compiler.rootScope.put(paramName, new BotiqProxy(paramName, prototype, compiler, bodyContext.expr(), paramRequiredType, false, false), paramSpec);
+            }
+
             BotiqDatum returnValue = compiler.resolveExpr(bodyContext.expr());
             if (returnValue != null) {
                 compiler.println("ret " + returnValue.getLlvmValue());
@@ -75,6 +106,12 @@ class BotiqToLlvmFunctionListener extends BotiqBaseListener {
                                     + "but in reality returns a '" + returnValue + "'.",
                             bodyContext.expr());
                     return;
+                }
+
+                // And retract those params
+                for (String key: pastValues.keySet()) {
+                    BotiqDatum pastValue = pastValues.get(key);
+                    compiler.rootScope.put(key, pastValue, bodyContext);
                 }
             } else {
                 compiler.error("Cannot return invalid expression '" + bodyContext.expr().getText() + "' within lambda.", bodyContext.expr());

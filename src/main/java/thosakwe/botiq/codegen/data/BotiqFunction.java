@@ -4,6 +4,7 @@ import org.antlr.v4.runtime.ParserRuleContext;
 import thosakwe.botiq.antlr.BotiqParser;
 import thosakwe.botiq.codegen.BotiqToLlvmCompiler;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class BotiqFunction extends BotiqDatum {
@@ -43,8 +44,22 @@ public class BotiqFunction extends BotiqDatum {
         super(compiler, source);
     }
 
+    public List<String> collectArguments(BotiqParser.ArgSpecContext argSpecContext, ParserRuleContext source, String name) {
+        List<String> result = new ArrayList<String>();
+
+        for (int i = 0; i < argSpecContext.expr().size(); i++) {
+            BotiqDatum arg = compiler.resolveExpr(argSpecContext.expr(i));
+
+            if (arg != null)
+                result.add(arg.getLlvmValue());
+            else compiler.error("Invalid expression '" + argSpecContext.expr(i).getText() + "' passed to '" + name + "'.", source);
+        }
+
+        return result;
+    }
+
     @Override
-    public BotiqDatum invoke(BotiqParser.ArgSpecContext argSpecContext, ParserRuleContext source) {
+    public BotiqDatum invoke(BotiqParser.ArgSpecContext argSpecContext, ParserRuleContext source, String variableName) {
         if (body.block() != null) {
             List<BotiqParser.StmtContext> stmts = body.block().stmt();
 

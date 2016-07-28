@@ -1,6 +1,14 @@
 fn greet(argc:int, argv:string):string => "Hello, world!"
 
-fn main():int {
+fn chisnall():int {
+    int b = 12;
+    ret b;
+}
+
+fn identity(x:int):int => x
+
+fn main(argc:int, argv:string):int {
+    printf("Received %d args", argc);
     string msg = greet(420, "blaze it");
     printf("%d blaze it", 420);
     puts(msg);

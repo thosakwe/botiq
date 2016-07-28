@@ -1,6 +1,5 @@
 package thosakwe.botiq.codegen;
 
-import thosakwe.botiq.antlr.BotiqBaseListener;
 import thosakwe.botiq.antlr.BotiqBaseVisitor;
 import thosakwe.botiq.antlr.BotiqParser;
 import thosakwe.botiq.codegen.data.BotiqDatum;
@@ -44,6 +43,7 @@ class BotiqToLlvmStatementVisitor extends BotiqBaseVisitor {
             return null;
         }
 
+        BotiqType requiredType = new BotiqType(compiler);
         BotiqDatum value = compiler.resolveExpr(ctx.expr());
 
         // Now, type-check this
@@ -56,14 +56,12 @@ class BotiqToLlvmStatementVisitor extends BotiqBaseVisitor {
                 return null;
             }
 
-            BotiqType requiredType = (BotiqType) requiredTypeDatum;
+            requiredType = (BotiqType) requiredTypeDatum;
             if (!requiredType.canCastDatum(value)) {
                 compiler.error("Cannot cast assignment value '" + ctx.expr().getText() + "' [" + value + "] to a '" + type + "'.", ctx);
                 return null;
             }
         }
-
-        compiler.rootScope.put(id, value, ctx, isConstant);
 
         if (isConstant) {
             BotiqSymbol symbol = compiler.rootScope.createSymbol(id);
@@ -72,10 +70,12 @@ class BotiqToLlvmStatementVisitor extends BotiqBaseVisitor {
         } else {
             // Allocate value
             // %msg = alloca i8*, align 8
-            compiler.println("%" + id + " = alloca " + value.getLlvmType());
+            String variable = compiler.getVariableNameForId(id);
+            compiler.println("%" + variable + " = alloca " + value.getLlvmType());
             compiler.print("store " + value.getLlvmValue() + ", ", false);
-            compiler.writeln(value.getLlvmType() + "* %" + id);
-            // Todo: Align???
+            compiler.writeln(value.getLlvmType() + "* %" + variable);
+            //compiler.writeln(value.getLlvmType() + "* %" + variable);
+            compiler.rootScope.put(id, new BotiqProxy(variable, value, compiler, ctx.expr(), requiredType, true, true), ctx);
         }
 
         return super.visitVardeclStmt(ctx);

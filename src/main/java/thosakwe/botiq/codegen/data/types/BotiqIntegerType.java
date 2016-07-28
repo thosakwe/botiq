@@ -1,6 +1,7 @@
 package thosakwe.botiq.codegen.data.types;
 
 import thosakwe.botiq.codegen.BotiqInteger;
+import thosakwe.botiq.codegen.BotiqProxy;
 import thosakwe.botiq.codegen.BotiqSymbol;
 import thosakwe.botiq.codegen.BotiqToLlvmCompiler;
 import thosakwe.botiq.codegen.data.BotiqDatum;
@@ -18,12 +19,17 @@ public class BotiqIntegerType extends BotiqType {
 
     @Override
     public boolean canCastDatum(BotiqDatum datum) {
-        return datum instanceof BotiqInteger;
+        return datum instanceof BotiqInteger || datum.isProxyFor(this);
     }
 
     @Override
     public String getLlvmType() {
         return "i32";
+    }
+
+    @Override
+    public BotiqDatum getPrototype() {
+        return new BotiqInteger(compiler, 0);
     }
 
     @Override

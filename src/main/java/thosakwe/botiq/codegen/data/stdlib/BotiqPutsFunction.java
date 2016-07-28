@@ -8,6 +8,8 @@ import thosakwe.botiq.codegen.data.BotiqDatum;
 import thosakwe.botiq.codegen.data.BotiqFunction;
 import thosakwe.botiq.codegen.data.BotiqStandardResult;
 
+import java.util.List;
+
 public class BotiqPutsFunction extends BotiqFunction {
     public BotiqPutsFunction(BotiqToLlvmCompiler compiler) {
         super(compiler);
@@ -22,21 +24,18 @@ public class BotiqPutsFunction extends BotiqFunction {
     }
 
     @Override
-    public BotiqDatum invoke(BotiqParser.ArgSpecContext argSpecContext, ParserRuleContext source) {
-        compiler.print("call i32 @puts(");
+    public BotiqDatum invoke(BotiqParser.ArgSpecContext argSpecContext, ParserRuleContext source, String variableName) {
+        List<String> args = collectArguments(argSpecContext, source, "puts");
+        compiler.print("call i32 (i8*, ...) @puts(");
 
-        for (int i = 0; i < argSpecContext.expr().size(); i++) {
+        for (int i = 0; i < args.size(); i++) {
             if (i > 0)
                 compiler.write(", ", false);
-            BotiqDatum arg = compiler.resolveExpr(argSpecContext.expr(i));
-
-            if (arg != null)
-                compiler.write(arg.getLlvmValue());
-            else compiler.error("Invalid expression '" + argSpecContext.expr(i).getText() + "' passed to 'puts'.", source);
+            compiler.write(args.get(i));
         }
 
         compiler.writeln(")");
-        return new BotiqStandardResult(compiler);
+        return new BotiqStandardResult(compiler, variableName);
     }
 
     @Override

@@ -2,7 +2,6 @@ package thosakwe.botiq.codegen;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
-import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
 import org.apache.commons.cli.CommandLine;
 import thosakwe.botiq.antlr.BotiqBaseVisitor;
@@ -17,14 +16,17 @@ import thosakwe.botiq.codegen.data.types.BotiqIntegerType;
 import thosakwe.botiq.codegen.data.types.BotiqStringType;
 
 import java.io.PrintStream;
+import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
 
 public class BotiqToLlvmCompiler extends BotiqBaseVisitor {
     private final String absoluteInputPath;
     public List<String> compilerErrors = new ArrayList<String>();
     public List<String> compilerWarnings = new ArrayList<String>();
     boolean hasMain = false;
+    BotiqParser.FunctionBodyContext mainBody = null;
     public BotiqScope rootScope = new BotiqScope(this);
     int tabs = 0;
 
@@ -35,6 +37,7 @@ public class BotiqToLlvmCompiler extends BotiqBaseVisitor {
     private boolean verbose;
     private BotiqToLlvmStatementVisitor statementListener = new BotiqToLlvmStatementVisitor(this);
     private boolean allowRawOutput = false;
+    private Map<String, Long> variableNames = new HashMap<String, Long>();
     public BotiqParser.CompilationUnitContext ast;
 
     public BotiqToLlvmCompiler(String absoluteInputPath, PrintStream output, CommandLine commandLine) {
@@ -74,7 +77,10 @@ public class BotiqToLlvmCompiler extends BotiqBaseVisitor {
         }
 
         if (hasMain) {
-            println("%result = tail call i32 @botiq_main()");
+            print("%result = tail call i32 @botiq_main(");
+            if (mainBody.paramSpec().size() == 2)
+                write("i32 %argc, i8** %argv");
+            writeln(")");
             println("ret i32 %result");
         } else println("ret i32 0");
 
@@ -128,6 +134,16 @@ public class BotiqToLlvmCompiler extends BotiqBaseVisitor {
         int line = start.getLine();
         int pos = start.getCharPositionInLine();
         compilerErrors.add("error: " + error + " (" + absoluteInputPath + ":" + line + ":" + pos + ")");
+    }
+
+    public String getRegisterName() {
+        return getVariableNameForId("");
+    }
+
+    public String getVariableNameForId(String id) {
+        Long result = variableNames.containsKey(id) ? variableNames.get(id) + 1 : 0L;
+        variableNames.put(id, result);
+        return id + result;
     }
 
     public void print(String text) {
@@ -206,6 +222,8 @@ public class BotiqToLlvmCompiler extends BotiqBaseVisitor {
         return "i32";
     }
 
+    //public String getStringForType(BotiqType )
+
     void walk(String name, BotiqType requiredType, BotiqParser.FunctionBodyContext functionBodyContext) {
         BotiqParser.BlockContext blockContext = functionBodyContext.block();
 
@@ -233,7 +251,7 @@ public class BotiqToLlvmCompiler extends BotiqBaseVisitor {
         statementListener.visitStmt(stmtContext);
     }
 
-    private BotiqDatum invokeFunction(final BotiqDatum target, BotiqParser.ArgSpecContext argSpec, ParserRuleContext source) {
+    private BotiqDatum invokeFunctionOld(final BotiqDatum target, BotiqParser.ArgSpecContext argSpec, ParserRuleContext source) {
         // Check if function
         if (!(target instanceof BotiqFunction)) {
             error("Expression '" + target + "' is not a function.", source);
@@ -249,12 +267,13 @@ public class BotiqToLlvmCompiler extends BotiqBaseVisitor {
             return null;
         }
 
+        String variable = getRegisterName();
         // Load scope
         if (func.getId() == null) {
             // Native functions without ID's should be skipped
             //debug("Ignoring result of call to '" + func.toString() + "'");
-            return func.invoke(argSpec, source);
-        } else print("%result = call " + func.getLlvmType() + " " + func.getLlvmValue() + "(");
+            return func.invoke(argSpec, source, variable);
+        } else print("%" + variable + " = call " + func.getLlvmType() + " " + func.getLlvmValue() + "(");
 
         rootScope.enter();
 
@@ -272,13 +291,17 @@ public class BotiqToLlvmCompiler extends BotiqBaseVisitor {
                 }
 
                 BotiqType requiredType = (BotiqType) requiredTypeDatum;
+                BotiqDatum prototype = requiredType.getPrototype();
 
                 if (!requiredType.canCastDatum(arg)) {
                     error("'" + argSpec.expr(i).getText() + "' cannot be cast to a(n) '" + param.type().getText() + "'", argSpec.expr(i));
                     break;
                 }
 
-                rootScope.put(param.ID().getText(), arg, argSpec.expr(i));
+                // debug("Injecting '" + param.ID().getText() + "' => '" + arg + "'");
+                // rootScope.put(param.ID().getText(), arg, argSpec.expr(i));
+                String paramName = param.ID().getText();
+                rootScope.put(paramName, new BotiqProxy(paramName, prototype, this, argSpec.expr(i), requiredType, false, false), argSpec.expr(i));
 
                 if (i > 0)
                     write(", ", false);
@@ -288,10 +311,91 @@ public class BotiqToLlvmCompiler extends BotiqBaseVisitor {
         }
         writeln(")");
 
-        final BotiqDatum result = func.invoke(argSpec, source);
+        final BotiqDatum result = func.invoke(argSpec, source, variable);
         rootScope.exit();
 
-        return new BotiqStandardResult(this) {
+        return new BotiqStandardResult(this, variable) {
+            @Override
+            public String getLlvmType() {
+                return result.getLlvmType();
+            }
+
+            @Override
+            public String toString() {
+                return "Result of calling '" + target + "'";
+            }
+        };
+    }
+
+    private BotiqDatum invokeFunction(final BotiqDatum target, BotiqParser.ArgSpecContext argSpec, ParserRuleContext source) {
+        // Check if function
+        if (!(target instanceof BotiqFunction)) {
+            error("Expression '" + target + "' is not a function.", source);
+            return null;
+        }
+
+        BotiqFunction func = (BotiqFunction) target;
+        List<String> arguments = new ArrayList<String>();
+
+        // Check for correct # of params.
+        // -1 means infinite parameters are allowed.
+        if (func.getNumberOfParams() > -1 && argSpec.expr().size() != func.getNumberOfParams()) {
+            error("'" + func.toString() + "' expects to be called with " + func.getNumberOfParams() + " argument(s), not " + argSpec.expr().size(), source);
+            return null;
+        }
+
+        // Just load params from arguments now
+        rootScope.enter();
+
+        if (func.body != null) {
+            // Then type-check params
+            List<BotiqParser.ParamSpecContext> params = func.body.paramSpec();
+            for (int i = 0; i < params.size() && i < argSpec.expr().size(); i++) {
+                BotiqParser.ParamSpecContext param = params.get(i);
+                BotiqDatum arg = resolveExpr(argSpec.expr(i));
+                BotiqDatum requiredTypeDatum = rootScope.get(param.type().getText(), source);
+
+                if (requiredTypeDatum == null || !(requiredTypeDatum instanceof BotiqType)) {
+                    error("'" + argSpec.expr(i).getText() + "' cannot be cast to the non-existent type '" + param.type().getText() + "'", argSpec.expr(i));
+                    break;
+                }
+
+                BotiqType requiredType = (BotiqType) requiredTypeDatum;
+                BotiqDatum prototype = requiredType.getPrototype();
+
+                if (!requiredType.canCastDatum(arg)) {
+                    error("'" + argSpec.expr(i).getText() + "' cannot be cast to a(n) '" + param.type().getText() + "'", argSpec.expr(i));
+                    break;
+                }
+
+                // debug("Injecting '" + param.ID().getText() + "' => '" + arg + "'");
+                // rootScope.put(param.ID().getText(), arg, argSpec.expr(i));
+                String paramName = param.ID().getText();
+                rootScope.put(paramName, new BotiqProxy(paramName, prototype, this, argSpec.expr(i), requiredType, false, false), argSpec.expr(i));
+
+                arguments.add(arg.getLlvmValue());
+            }
+        }
+
+        String variable = getRegisterName();
+        // Load scope
+        if (func.getId() == null) {
+            // Native functions without ID's should be skipped
+            //debug("Ignoring result of call to '" + func.toString() + "'");
+            return func.invoke(argSpec, source, variable);
+        } else print("%" + variable + " = call " + func.getLlvmType() + " " + func.getLlvmValue() + "(");
+
+        for (int i = 0; i < arguments.size(); i++) {
+            if (i > 0)
+                write(", ", false);
+            write(arguments.get(i));
+        }
+        writeln(")");
+
+        final BotiqDatum result = func.invoke(argSpec, source, variable);
+        rootScope.exit();
+
+        return new BotiqStandardResult(this, variable) {
             @Override
             public String getLlvmType() {
                 return result.getLlvmType();

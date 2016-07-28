@@ -29,6 +29,11 @@ public class BotiqStringType extends BotiqType {
     }
 
     @Override
+    public BotiqDatum getPrototype() {
+        return new BotiqString(compiler, "");
+    }
+
+    @Override
     public void onAssigned(BotiqSymbol symbol) {
         symbol.setConstant(true);
         super.onAssigned(symbol);

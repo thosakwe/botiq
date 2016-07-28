@@ -1,15 +1,16 @@
 package thosakwe.botiq.codegen.data;
 
-import thosakwe.botiq.antlr.BotiqParser;
 import thosakwe.botiq.codegen.BotiqToLlvmCompiler;
 
 public class BotiqStandardResult extends BotiqDatum {
-    public BotiqStandardResult(BotiqToLlvmCompiler compiler) {
+    private final String name;
+    public BotiqStandardResult(BotiqToLlvmCompiler compiler, String variable) {
         super(compiler, null);
+        this.name = variable;
     }
 
     @Override
     public String getLlvmValue() {
-        return getLlvmType() + " %result";
+        return getLlvmType() + " %" + name;
     }
 }

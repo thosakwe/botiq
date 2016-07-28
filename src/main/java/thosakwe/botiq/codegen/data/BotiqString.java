@@ -21,6 +21,11 @@ public class BotiqString extends BotiqDatum {
         id = compiler.rootScope.createConstant(this, ".str", source).getId();
     }
 
+    public BotiqString(BotiqToLlvmCompiler compiler, String text) {
+        super(compiler, null);
+        this.text = text;
+    }
+
     @Override
     public void declareConst(String id) {
         compiler.println("@" + id + " = private unnamed_addr constant [" + (text.length() + 1) + " x i8] c\"" + text + "\\00\", align 1");

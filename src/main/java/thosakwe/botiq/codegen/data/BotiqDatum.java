@@ -2,8 +2,10 @@ package thosakwe.botiq.codegen.data;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import thosakwe.botiq.antlr.BotiqParser;
+import thosakwe.botiq.codegen.BotiqInteger;
 import thosakwe.botiq.codegen.BotiqSymbol;
 import thosakwe.botiq.codegen.BotiqToLlvmCompiler;
+import thosakwe.botiq.codegen.data.types.BotiqIntegerType;
 
 public abstract class BotiqDatum {
     protected final BotiqToLlvmCompiler compiler;
@@ -30,7 +32,7 @@ public abstract class BotiqDatum {
         return null;
     }
 
-    public BotiqDatum invoke(BotiqParser.ArgSpecContext argSpecContext, ParserRuleContext source) {
+    public BotiqDatum invoke(BotiqParser.ArgSpecContext argSpecContext, ParserRuleContext source, String variableName) {
         if (this.source != null)
             compiler.error("Expression '" + this.source.getText() + "' is not a function.", argSpecContext);
         else compiler.error("Expression [" + getClass().getName() + "] is not a function.", argSpecContext);
@@ -43,5 +45,9 @@ public abstract class BotiqDatum {
     }
 
     public void onAssigned(BotiqSymbol symbol) {
+    }
+
+    public boolean isProxyFor(BotiqType type) {
+        return false;
     }
 }
